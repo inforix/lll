@@ -5,5 +5,11 @@ sentence_transformers
 loralib
 peft
 langchain
-protobuf==3.20
+protobuf==3.20.3
 accelerate
+PyPDF2
+faiss-cpu
+tiktoken
+llama_index
+chromadb
+unstructured
