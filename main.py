@@ -1,27 +1,25 @@
 from typing import List, Optional, Mapping, Any
 import torch
 
-from langchain.llms import HuggingFacePipeline
-from langchain.llms.base import LLM
 from langchain import PromptTemplate, LLMChain, OpenAI
 from langchain.document_loaders import TextLoader, DirectoryLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import FAISS, Chroma
 from langchain.chains.question_answering import load_qa_chain
-from langchain.chains import ConversationalRetrievalChain
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.chains import ConversationalRetrievalChain, RetrievalQA
 from langchain.embeddings import OpenAIEmbeddings
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.indexes import VectorstoreIndexCreator
+from llama_index.embeddings.base import BaseEmbedding
+from llama_index.readers.schema.base import Document
+from llama_index import SimpleDirectoryReader, LangchainEmbedding, GPTListIndex,GPTSimpleVectorIndex, PromptHelper, LLMPredictor, ServiceContext
 
-
-from llama_index import SimpleDirectoryReader, LangchainEmbedding, GPTListIndex,GPTSimpleVectorIndex, PromptHelper
-from llama_index import LLMPredictor, ServiceContext
-
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, AutoModelForSeq2SeqLM, Pipeline
-from transformers import LlamaTokenizer, LlamaForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaTokenizer, LlamaForCausalLM
+import transformers
 
 from peft import PeftModel
 from PyPDF2 import PdfReader
+from customllm import CustomVicunaLLM, CustomLLM
 
 import os
 
@@ -33,19 +31,24 @@ if torch.cuda.is_available():
 else:
   device = torch.device('cpu')
 
+assert (
+    "LlamaTokenizer" in transformers._import_structure["models.llama"]
+), "LLaMA is now in HuggingFace's main branch.\nPlease reinstall it: pip uninstall transformers && pip install git+https://github.com/huggingface/transformers.git"
 
-# The prompt template below is taken from llama.cpp
- # and is slightly different from the one used in training.
- # But we find it gives better results
-prompt_input = (
-  "Below is an instruction that describes a task. "
-  "Write a response that appropriately completes the request.\n\n"
-  "### Instruction:\n\n{instruction}\n\n### Response:\n\n"
-)
 
-prompt = PromptTemplate(template=prompt_input, input_variables=["instruction"])
+def create_llama_prompt():
+  # The prompt template below is taken from llama.cpp
+  # and is slightly different from the one used in training.
+  # But we find it gives better results
+  prompt_input = (
+    "Below is an instruction that describes a task. "
+    "Write a response that appropriately completes the request.\n\n"
+    "### Instruction:\n\n{instruction}\n\n### Response:\n\n"
+  )
 
-sample_data = ["为什么要减少污染，保护环境？"]
+  prompt = PromptTemplate(template=prompt_input, input_variables=["instruction"])
+  
+  return prompt
 
 generation_config = dict(
   temperature=0.2,
@@ -57,30 +60,25 @@ generation_config = dict(
   max_new_tokens=400
 )
 
-def generate_prompt(instruction, input=None):
-  if input:
-    instruction = instruction + '\n' + input
-  return prompt_input.format_map({'instruction': instruction})
-  
-  
-#model_path = "../models/llama-7b-hf"
-model_path = "../models/chinese-llama-7b-hf-merged"
-#model_path = "../models/moss-moon-003-base"
+base_model = "../models/chinese-llama-7b-hf-merged"
+base_model = "../models/chatglm-6b"
+base_model = "../models/llama-7b-hf"
+#model_path = "../models/moss-moon-003-sft-int4"
 lora_model_path = "../models/chinese-alpaca-lora-7b"
+#lora_model_path = "../models/Chinese-Vicuna-lora-7b-belle-and-guanaco"
 
-def load_model(model_path: str, lora_path:str = None):
+def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu")):
   assert model_path is not None
 
   load_type = torch.float16
   tokenizer_model_path = model_path
   if lora_path is not None:
     tokenizer_model_path = lora_path
-  tokenizer = AutoTokenizer.from_pretrained(tokenizer_model_path, trust_remote_code=True)
+  tokenizer = LlamaTokenizer.from_pretrained(tokenizer_model_path, trust_remote_code=True)
   base_model = AutoModelForCausalLM.from_pretrained(
     model_path,
     load_in_8bit=False,
     #load_in_8bit_fp32_cpu_offload=True,
-    device_map = "auto",
     low_cpu_mem_usage = True,
     torch_dtype = load_type,
     trust_remote_code=True
@@ -90,45 +88,60 @@ def load_model(model_path: str, lora_path:str = None):
   tokenizer_vocab_size = len(tokenizer)
   print(f"Vocab of the base model: {model_vocab_size}")
   print(f"Vocab of the tokenizer: {tokenizer_vocab_size}")
-  if model_vocab_size <= tokenizer_vocab_size:
+  if model_vocab_size < tokenizer_vocab_size:
     print("Resize model embeddings to fit tokenizer")
     base_model.resize_token_embeddings(tokenizer_vocab_size)
 
   if lora_path is None:
     model = base_model
   else:
-    model = PeftModel.from_pretrained(base_model, lora_model_path, torch_dtype = load_type)
+    model = PeftModel.from_pretrained(base_model, lora_path, torch_dtype = load_type)
 
-  model.float()
+  if device == torch.device("cpu"):
+    model.float()
   model.to(device)
   model.eval()
  
   return model, tokenizer
 
 
+def load_vicuna_model(device):
+  llama_model_path = "../models/llama-7b-hf"
+  lora_model_path = "../models/Chinese-Vicuna-lora-7b-belle-and-guanaco"
+  
+  # load tokenizer
+  tokenizer = LlamaTokenizer.from_pretrained(llama_model_path, trust_remote_code=True)
+  
+  # load model
+  lora_bin_path = os.path.join(lora_model_path, "adapter_model.bin")
+  print(lora_bin_path)
+  if not os.path.exists(lora_bin_path):
+    pytorch_bin_path = os.path.join(lora_model_path, "pytorch_model.bin")
+    print(pytorch_bin_path)
+    if os.path.exists(pytorch_bin_path):
+      os.rename(pytorch_bin_path, lora_bin_path)
+    else:
+      assert ('Checkpoint is not Found!')
+      
+  if torch.cuda.is_available():
+    model = LlamaForCausalLM.from_pretrained(llama_model_path,
+                                             load_in_8bit=True,
+                                             torch_dtype = torch.float16,
+                                             device_map={"":0},)
+    model = PeftModel.from_pretrained(model, lora_model_path, torch_dtype = torch.float16, device_map={"":0})
+  else:
+    model = LlamaForCausalLM.from_pretrained(llama_model_path,
+                                             device_map={"":device},
+                                             low_cpu_mem_usage=True)
+    model = PeftModel.from_pretrained(model, lora_model_path, device_map={"":device})
+    #model.half()
+  
+  print(model.dtype)
+  model.eval()
+
+  return model, tokenizer
 
 
-
-class CustomLLM(LLM):
-  pipeline:Pipeline = None
-  def __init__(self, model, tokenizer, device: torch.device = "cpu"):
-    super().__init__()
-    self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device, )
-
-  def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-    prompt_length = len(prompt)
-    response = self.pipeline(prompt, max_new_tokens=num_outputs)[0]["generated_text"]
-
-    # only return newly generated tokens
-    return response[prompt_length:]
-
-  @property
-  def _identifying_params(self) -> Mapping[str, Any]:
-      return {"name_of_model": self.model_name}
-
-  @property
-  def _llm_type(self) -> str:
-      return "custom"
       
 # define prompt helper
 # set maximum input size
@@ -140,10 +153,14 @@ max_chunk_overlap = 20
 prompt_helper = PromptHelper(max_input_size, num_outputs, max_chunk_overlap, chunk_size_limit=2000)
 
 def load_service_meta():
-  model, tokenizer = load_model(model_path, None)
+  #model, tokenizer = load_model(base_model, lora_model_path, device)
+  model, tokenizer = load_vicuna_model(device)
+  
+  llama_model_path = "../models/all-mpnet-base-v2"
+  embed_model = None #LangchainEmbedding(HuggingFaceEmbeddings(model_name=llama_model_path))
   # define LLM
-  llm_predictor = LLMPredictor(llm=CustomLLM(model, tokenizer))
-  service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, prompt_helper=prompt_helper)
+  llm_predictor = LLMPredictor(llm=CustomLLM(model, tokenizer, device))
+  service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, embed_model= embed_model, prompt_helper=prompt_helper)
   return service_context
 
 def load_service_openai():
@@ -154,67 +171,70 @@ def load_service_openai():
   return service_context
 
 
-
-def interactivate():
-  model, tokenizer = load_model(model_path, None)
-  
-  pipe = pipeline(
-    "text-generation",
-    model=model,
-    tokenizer=tokenizer,
-    max_length = 2000
-  )
-  local_llm = HuggingFacePipeline(pipeline=pipe)
-  llm_chain = LLMChain(prompt=prompt, llm=local_llm)
-  while True:
-    question = input("Human: ")
-    print("\n")
-    print(llm_chain.run(question))
-
-def load_documents():
+def load_documents() -> List[Document]:
   loader = DirectoryLoader("../data/", "**/*.txt")
   documents = loader.load()
-  text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+  text_splitter = CharacterTextSplitter(        
+   separator = "\n\n\n",
+   chunk_size = 8000,
+   chunk_overlap  = 0,
+   length_function = len,
+  )
+  #text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
   texts = text_splitter.split_documents(documents)
   return texts
 
 def ask(index, question):
+  print("Human: ", question)
   response = index.query(question, response_mode="compact")
   print("AI: ", response)
+
   
-def local_llm():
+def gpt_list_index():
   documents = SimpleDirectoryReader("../data").load_data()
 
   service_context = load_service_meta()
 
   index = GPTListIndex.from_documents(documents, service_context=service_context)
 
+  return index
+
+  
+def main():
+  index = gpt_list_index()
   # Query and print response
-  question = "上海高级国际航运学院是什么时候成立的？"
-  ask(index, question)
+  ask(index, "上海高级国际航运学院是什么时候成立的？")
+  ask(index, "学校有几个博士点？")
+  ask(index, "学校有多少个硕士点")
+  ask(index, "学校有马克思主义学院吗？")
 
   while True:
     question = input("Human: ")
     print("\n")
+    if question == "quit":
+      break
+    
     ask(index, question)
 
 #interactivate2()
 
 def qa():
+  model, tokenizer = load_model(base_model, lora_model_path)
   texts = load_documents()
-  embeddings = OpenAIEmbeddings()
+  #embeddings = OpenAIEmbeddings()
+  embeddings = HuggingFaceEmbeddings(model_name=base_model)
   db = Chroma.from_documents(texts, embeddings)
   retriever = db.as_retriever(search_type="similarity", search_kwargs={"k":1})
-  qa = ConversationalRetrievalChain.from_llm(OpenAI(), retriever)
+  qa = RetrievalQA.from_chain_type(llm=CustomLLM(model, tokenizer), chain_type="stuff", retriever=retriever)
   
   chat_history = []
   while True:
     query = input("Human: ")
-    result = qa({"question": query, "chat_history": chat_history})
+    result = qa(query)
     print("AI: ", result["answer"])
 
 def vectors():
-  model, tokenizer = load_model(model_path, None)
+  model, tokenizer = load_model(base_model, lora_model_path)
   # define LLM
   llm=CustomLLM(model, tokenizer)
   
@@ -227,7 +247,7 @@ def vectors():
   while True:
     question = input("Human: ")
     print("\n")
-    response = index.query(question, llm=llm, response_mode="compact")
+    response = index.query(question, llm=llm)
     print("AI: ", response)
   
 def load_pdf(file):
@@ -246,7 +266,7 @@ def load_pdf(file):
   )
   texts = text_splitter.split_text(raw_text)
   
-  embeddings = LangchainEmbedding(HuggingFaceEmbeddings(model_name = model_path))
+  embeddings = LangchainEmbedding(HuggingFaceEmbeddings(model_name = base_model))
   docsearch = FAISS.from_texts(texts, embeddings)
   return docsearch
 
@@ -268,7 +288,7 @@ def construct_index(directory_path):
   
   documents = SimpleDirectoryReader(directory_path).load_data()
   
-  service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
+  service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, prompt_helper=prompt_helper)
   index = GPTSimpleVectorIndex.from_documents(documents, service_context=service_context)
   
   index.save_to_disk('index.json')
@@ -305,6 +325,6 @@ def ask_bot(input_index:str = 'index.json'):
 
 if __name__ == "__main__":
   #qa()
-  local_llm()
+  main()
   #vectors()
   
