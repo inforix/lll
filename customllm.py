@@ -20,6 +20,7 @@ class CustomLLM(LLM):
     #print(response)
     generated = response[0]["generated_text"]
     print("prompt length:\t", prompt_length)
+    print(generated[prompt_length:])
     # only return newly generated tokens
     return generated[prompt_length:]
 

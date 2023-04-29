@@ -157,7 +157,7 @@ def load_service_meta():
   model, tokenizer = load_vicuna_model(device)
   
   llama_model_path = "../models/all-mpnet-base-v2"
-  embed_model = None #LangchainEmbedding(HuggingFaceEmbeddings(model_name=llama_model_path))
+  embed_model = LangchainEmbedding(HuggingFaceEmbeddings(model_name=llama_model_path))
   # define LLM
   llm_predictor = LLMPredictor(llm=CustomLLM(model, tokenizer, device))
   service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, embed_model= embed_model, prompt_helper=prompt_helper)
@@ -186,7 +186,7 @@ def load_documents() -> List[Document]:
 
 def ask(index, question):
   print("Human: ", question)
-  response = index.query(question, response_mode="compact")
+  response = index.query(question,response_mode="default", mode="default")
   print("AI: ", response)
 
   
@@ -219,13 +219,13 @@ def main():
 #interactivate2()
 
 def qa():
-  model, tokenizer = load_model(base_model, lora_model_path)
+  model, tokenizer = load_model(base_model, lora_model_path, device)
   texts = load_documents()
   #embeddings = OpenAIEmbeddings()
-  embeddings = HuggingFaceEmbeddings(model_name=base_model)
+  embeddings = HuggingFaceEmbeddings(model_name="../models/all-mpnet-base-v2")
   db = Chroma.from_documents(texts, embeddings)
   retriever = db.as_retriever(search_type="similarity", search_kwargs={"k":1})
-  qa = RetrievalQA.from_chain_type(llm=CustomLLM(model, tokenizer), chain_type="stuff", retriever=retriever)
+  qa = RetrievalQA.from_chain_type(llm=CustomLLM(model, tokenizer, device), chain_type="stuff", retriever=retriever)
   
   chat_history = []
   while True:
