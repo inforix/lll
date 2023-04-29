@@ -1,5 +1,6 @@
 from typing import List, Optional, Mapping, Any
 import torch
+import logging
 
 from langchain import PromptTemplate, LLMChain, OpenAI
 from langchain.document_loaders import TextLoader, DirectoryLoader
@@ -23,9 +24,15 @@ from customllm import CustomVicunaLLM, CustomLLM
 
 import os
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 os.environ['OPENAI_API_KEY'] = "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"
 
-torch.cuda.is_available = lambda: False
+# disable GPU if needed
+if os.environ.get('DISABLE_GPU') == "1":
+  torch.cuda.is_available = lambda: False
+
 if torch.cuda.is_available():
   device = torch.device(0)
 else:
@@ -195,7 +202,7 @@ def gpt_list_index():
 
   service_context = load_service_meta()
 
-  index = GPTListIndex.from_documents(documents, service_context=service_context)
+  index = GPTSimpleVectorIndex.from_documents(documents, service_context=service_context)
 
   return index
 

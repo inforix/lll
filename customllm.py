@@ -3,24 +3,28 @@ from transformers import Pipeline, pipeline, GenerationConfig
 from langchain.llms.base import LLM
 from typing import List, Optional, Mapping, Any
 import sys
+import logging
 
 class CustomLLM(LLM):
   pipeline:Pipeline = None
-  max_new_tokens:int = 1000
+  max_new_tokens:int = 256
+  logger:Any 
   
   def __init__(self, model, tokenizer, device: torch.device = torch.device("cpu"), max_new_tokens:int = 1000 ):
     super().__init__()
+    self.logger = logging.getLogger(self.__class__.__name__)
+    self.logger.setLevel(logging.DEBUG)
     self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device, trust_remote_code=True, torch_dtype = torch.float16)
     self.max_new_tokens = max_new_tokens
 
   def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
     prompt_length = len(prompt)
     response = self.pipeline(prompt, max_new_tokens=self.max_new_tokens)
-    print("=================== RESPONSE =================== \n")
-    #print(response)
+    self.logger.debug("=================== RESPONSE =================== \n")
+    self.logger.debug(response)
     generated = response[0]["generated_text"]
-    print("prompt length:\t", prompt_length)
-    print(generated[prompt_length:])
+    self.logger.debug(f"prompt length:\t{prompt_length}")
+    self.logger.debug(generated[prompt_length:])
     # only return newly generated tokens
     return generated[prompt_length:]
 
