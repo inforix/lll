@@ -152,9 +152,9 @@ def load_vicuna_model(device):
       
 # define prompt helper
 # set maximum input size
-max_input_size = 4096
+max_input_size = 1024
 # set number of output tokens
-num_outputs = 1000
+num_outputs = 256
 # set maximum chunk overlap
 max_chunk_overlap = 20
 prompt_helper = PromptHelper(max_input_size, num_outputs, max_chunk_overlap, chunk_size_limit=2000)
