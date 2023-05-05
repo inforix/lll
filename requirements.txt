@@ -14,3 +14,4 @@ tiktoken
 llama_index
 chromadb
 unstructured
+pytesseract

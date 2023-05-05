@@ -12,6 +12,7 @@ from langchain.chains import ConversationalRetrievalChain, RetrievalQA, VectorDB
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.indexes import VectorstoreIndexCreator
+from langchain.chat_models import ChatOpenAI
 from llama_index.embeddings.base import BaseEmbedding
 from llama_index.readers.schema.base import Document
 from llama_index import SimpleDirectoryReader, LangchainEmbedding, GPTListIndex,GPTSimpleVectorIndex, PromptHelper, LLMPredictor, ServiceContext
@@ -189,7 +190,7 @@ def load_documents() -> List[Document]:
   loader = DirectoryLoader("../data/", "**/*.txt")
   documents = loader.load()
   text_splitter = CharacterTextSplitter(        
-   separator = "\n\n\n",
+   separator = "\n",
    chunk_size = 1000,
    chunk_overlap  = 0,
    length_function = len,
@@ -246,7 +247,7 @@ def run_async_chain(chain, question, chat_history):
   result["answer"] = answer
   return result
   
-def qa():
+def qa(chat_mode = False):
   # load prompt
   with open("prompts/question_prompt.txt", "r") as f:
     template_quest = f.read()
@@ -267,48 +268,66 @@ def qa():
   embeddings = HuggingFaceEmbeddings(model_name="../models/all-mpnet-base-v2")
   docsearch = FAISS.from_documents(texts, embeddings)
   retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":2})
-  #model, tokenizer = load_model(base_model, lora_model_path, device)
-  #llm = CustomLLM(model, tokenizer, device)
-  llm = OpenAI(temperature=0)
-  messages_combine = [
-      SystemMessagePromptTemplate.from_template(chat_combine_template),
-      HumanMessagePromptTemplate.from_template("{question}")
-  ]
-  p_chat_combine = ChatPromptTemplate.from_messages(messages_combine)
-  messages_reduce = [
-      SystemMessagePromptTemplate.from_template(chat_reduce_template),
-      HumanMessagePromptTemplate.from_template("{question}")
-  ]
-  p_chat_reduce = ChatPromptTemplate.from_messages(messages_reduce)
-  # qa_chain = load_qa_chain(llm=llm, chain_type="map_reduce",
-  #                                    combine_prompt=c_prompt, question_prompt=q_prompt)
-  question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
-  doc_chain = load_qa_chain(llm, chain_type="map_reduce", combine_prompt=p_chat_combine)
-  chain = ConversationalRetrievalChain(
-      retriever=docsearch.as_retriever(k=2),
-      question_generator=question_generator,
-      combine_docs_chain=doc_chain,
-  )
-  chat_history = []
-  #chain = VectorDBQA(combine_documents_chain=qa_chain, vectorstore=docsearch, k=3)
-  #qa = RetrievalQA.from_chain_type(llm=CustomLLM(model, tokenizer, device), chain_type="stuff", retriever=retriever)
-  #chain = RetrievalQA.from_chain_type(llm=llm, chain_type="map_reduce", retriever=retriever, return_source_documents=True)
   
-  result = run_async_chain(chain, "学校有几个博士点？", chat_history)
-  print("AI: ", result["answer"])
-  result = run_async_chain(chain, "上海高级国际航运学院是什么时候成立的？", chat_history)
-  print("AI: ", result["answer"])
-  result = run_async_chain(chain, "学校有多少个硕士点", chat_history)
-  print("AI: ", result["answer"])
-  result = run_async_chain(chain, "学校有马克思主义学院吗？", chat_history)
-  print("AI: ", result["answer"])
-  while True:
-    query = input("Human: ")
-    if query == "quit":
-      break
-    #result = ask_chain(chain, query)
-    result = run_async_chain(chain, query, chat_history)
+  if chat_mode:
+    llm = ChatOpenAI()
+    messages_combine = [
+        SystemMessagePromptTemplate.from_template(chat_combine_template),
+        HumanMessagePromptTemplate.from_template("{question}")
+    ]
+    p_chat_combine = ChatPromptTemplate.from_messages(messages_combine)
+    messages_reduce = [
+        SystemMessagePromptTemplate.from_template(chat_reduce_template),
+        HumanMessagePromptTemplate.from_template("{question}")
+    ]
+    p_chat_reduce = ChatPromptTemplate.from_messages(messages_reduce)
+    
+    question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
+    doc_chain = load_qa_chain(llm, chain_type="map_reduce", combine_prompt=p_chat_combine)
+    chain = ConversationalRetrievalChain(
+        retriever=docsearch.as_retriever(k=2),
+        question_generator=question_generator,
+        combine_docs_chain=doc_chain,
+    )
+    chat_history = []
+    #chain = RetrievalQA.from_chain_type(llm=llm, chain_type="map_reduce", retriever=retriever, return_source_documents=True)
+    result = run_async_chain(chain, "学校有几个博士点？", chat_history)
     print("AI: ", result["answer"])
+    result = run_async_chain(chain, "上海高级国际航运学院是什么时候成立的？", chat_history)
+    print("AI: ", result["answer"])
+    result = run_async_chain(chain, "学校有多少个硕士点", chat_history)
+    print("AI: ", result["answer"])
+    result = run_async_chain(chain, "学校有马克思主义学院吗？", chat_history)
+    print("AI: ", result["answer"])
+    while True:
+      query = input("Human: ")
+      if query == "quit":
+        break
+      #result = ask_chain(chain, query)
+      result = run_async_chain(chain, query, chat_history)
+      print("AI: ", result["answer"])
+  else:
+    model, tokenizer = load_model(base_model, lora_model_path, device)
+    llm = CustomLLM(model, tokenizer, device)
+    qa_chain = load_qa_chain(llm=llm, chain_type="map_reduce",
+                            combine_prompt=c_prompt, question_prompt=q_prompt)
+    chain = RetrievalQA(combine_documents_chain=qa_chain, retriever=retriever, return_source_documents=True)
+    result = ask_chain(chain, "学校有几个博士点？")
+    print("AI: ", result["answer"])
+    result = ask_chain(chain, "上海高级国际航运学院是什么时候成立的？")
+    print("AI: ", result["answer"])
+    result = ask_chain(chain, "学校有多少个硕士点")
+    print("AI: ", result["answer"])
+    result = ask_chain(chain, "学校有马克思主义学院吗？")
+    print("AI: ", result["answer"])
+    while True:
+      query = input("Human: ")
+      if query == "quit":
+        break
+      #result = ask_chain(chain, query)
+      result = run_async_chain(chain, query, chat_history)
+      print("AI: ", result["answer"])
+  
 
 def ask_chain(chain, query):
   result = chain({"query": query})
