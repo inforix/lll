@@ -13,9 +13,8 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.indexes import VectorstoreIndexCreator
 from langchain.chat_models import ChatOpenAI
-from llama_index.embeddings.base import BaseEmbedding
 from llama_index.readers.schema.base import Document
-from llama_index import SimpleDirectoryReader, LangchainEmbedding, GPTListIndex,GPTSimpleVectorIndex, PromptHelper, LLMPredictor, ServiceContext
+from llama_index import SimpleDirectoryReader, LangchainEmbedding, GPTListIndex, PromptHelper, LLMPredictor, ServiceContext, GPTVectorStoreIndex
 from langchain.prompts.chat import (
     ChatPromptTemplate,
     SystemMessagePromptTemplate,
@@ -28,7 +27,8 @@ import transformers
 
 from peft import PeftModel
 from PyPDF2 import PdfReader
-from customllm import CustomVicunaLLM, CustomLLM
+from utils.customllm import CustomVicunaLLM, CustomLLM
+from embedding import load_embedding
 
 import os
 
@@ -78,83 +78,9 @@ generation_config = dict(
 base_model = "../models/chinese-llama-7b-hf-merged"
 base_model = "../models/chatglm-6b"
 base_model = "../models/llama-7b-hf"
-#model_path = "../models/moss-moon-003-sft-int4"
+moss_moon_model = "../models/moss-moon-003"
 lora_model_path = "../models/chinese-alpaca-lora-7b"
 #lora_model_path = "../models/Chinese-Vicuna-lora-7b-belle-and-guanaco"
-
-def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu")):
-  assert model_path is not None
-
-  load_type = torch.float16
-  tokenizer_model_path = model_path
-  if lora_path is not None:
-    tokenizer_model_path = lora_path
-  tokenizer = LlamaTokenizer.from_pretrained(tokenizer_model_path, trust_remote_code=True)
-  base_model = AutoModelForCausalLM.from_pretrained(
-    model_path,
-    load_in_8bit=False,
-    #load_in_8bit_fp32_cpu_offload=True,
-    low_cpu_mem_usage = True,
-    torch_dtype = load_type,
-    trust_remote_code=True
-  )
-
-  model_vocab_size = base_model.get_input_embeddings().weight.size(0)
-  tokenizer_vocab_size = len(tokenizer)
-  print(f"Vocab of the base model: {model_vocab_size}")
-  print(f"Vocab of the tokenizer: {tokenizer_vocab_size}")
-  if model_vocab_size < tokenizer_vocab_size:
-    print("Resize model embeddings to fit tokenizer")
-    base_model.resize_token_embeddings(tokenizer_vocab_size)
-
-  if lora_path is None:
-    model = base_model
-  else:
-    model = PeftModel.from_pretrained(base_model, lora_path, torch_dtype = load_type)
-
-  if device == torch.device("cpu"):
-    model.float()
-  model.to(device)
-  model.eval()
- 
-  return model, tokenizer
-
-
-def load_vicuna_model(device):
-  llama_model_path = "../models/llama-7b-hf"
-  lora_model_path = "../models/Chinese-Vicuna-lora-7b-belle-and-guanaco"
-  
-  # load tokenizer
-  tokenizer = LlamaTokenizer.from_pretrained(llama_model_path, trust_remote_code=True)
-  
-  # load model
-  lora_bin_path = os.path.join(lora_model_path, "adapter_model.bin")
-  print(lora_bin_path)
-  if not os.path.exists(lora_bin_path):
-    pytorch_bin_path = os.path.join(lora_model_path, "pytorch_model.bin")
-    print(pytorch_bin_path)
-    if os.path.exists(pytorch_bin_path):
-      os.rename(pytorch_bin_path, lora_bin_path)
-    else:
-      assert ('Checkpoint is not Found!')
-      
-  if torch.cuda.is_available():
-    model = LlamaForCausalLM.from_pretrained(llama_model_path,
-                                             load_in_8bit=True,
-                                             torch_dtype = torch.float16,
-                                             device_map={"":0},)
-    model = PeftModel.from_pretrained(model, lora_model_path, torch_dtype = torch.float16, device_map={"":0})
-  else:
-    model = LlamaForCausalLM.from_pretrained(llama_model_path,
-                                             device_map={"":device},
-                                             low_cpu_mem_usage=True)
-    model = PeftModel.from_pretrained(model, lora_model_path, device_map={"":device})
-    #model.half()
-  
-  print(model.dtype)
-  model.eval()
-
-  return model, tokenizer
 
 
       
@@ -167,12 +93,13 @@ num_outputs = 256
 max_chunk_overlap = 20
 prompt_helper = PromptHelper(max_input_size, num_outputs, max_chunk_overlap, chunk_size_limit=2000)
 
+
+  
 def load_service_meta():
   #model, tokenizer = load_model(base_model, lora_model_path, device)
   model, tokenizer = load_vicuna_model(device)
   
-  llama_model_path = "../models/all-mpnet-base-v2"
-  embed_model = LangchainEmbedding(HuggingFaceEmbeddings(model_name=llama_model_path))
+  embed_model = load_embedding("huggingface")
   # define LLM
   llm_predictor = LLMPredictor(llm=CustomLLM(model, tokenizer, device))
   service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, embed_model= embed_model, prompt_helper=prompt_helper)
@@ -190,10 +117,8 @@ def load_documents() -> List[Document]:
   loader = DirectoryLoader("../data/", "**/*.txt")
   documents = loader.load()
   text_splitter = CharacterTextSplitter(        
-   separator = "\n",
    chunk_size = 1000,
    chunk_overlap  = 0,
-   length_function = len,
   )
   #text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
   texts = text_splitter.split_documents(documents)
@@ -247,7 +172,7 @@ def run_async_chain(chain, question, chat_history):
   result["answer"] = answer
   return result
   
-def qa(chat_mode = False):
+def qa(chat_mode = False, vectordb: str = "chroma", embedding_source: str = "huggingface"):
   # load prompt
   with open("prompts/question_prompt.txt", "r") as f:
     template_quest = f.read()
@@ -264,10 +189,15 @@ def qa(chat_mode = False):
   q_prompt = PromptTemplate(input_variables=["context", "question"], template=template_quest, template_format="jinja2")
     
   texts = load_documents()
-  #embeddings = OpenAIEmbeddings()
-  embeddings = HuggingFaceEmbeddings(model_name="../models/all-mpnet-base-v2")
-  docsearch = FAISS.from_documents(texts, embeddings)
-  retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":2})
+  
+  embedding = load_embedding(embedding_source)
+    
+  if vectordb == "faiss":
+    docsearch = FAISS.from_documents(texts, embedding)
+    retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":2})
+  elif vectordb == "chroma":
+    docsearch = Chroma.from_documents(texts, embedding)
+    retriever = docsearch.as_retriever()
   
   if chat_mode:
     llm = ChatOpenAI()
@@ -309,23 +239,22 @@ def qa(chat_mode = False):
   else:
     model, tokenizer = load_model(base_model, lora_model_path, device)
     llm = CustomLLM(model, tokenizer, device)
-    qa_chain = load_qa_chain(llm=llm, chain_type="map_reduce",
-                            combine_prompt=c_prompt, question_prompt=q_prompt)
+    qa_chain = load_qa_chain(llm=llm, chain_type="map_reduce", combine_prompt=c_prompt, question_prompt=q_prompt)
     chain = RetrievalQA(combine_documents_chain=qa_chain, retriever=retriever, return_source_documents=True)
-    result = ask_chain(chain, "学校有几个博士点？")
+    result = ask_chain(chain, "上海海事大学有几个博士点？")
     print("AI: ", result["answer"])
     result = ask_chain(chain, "上海高级国际航运学院是什么时候成立的？")
     print("AI: ", result["answer"])
-    result = ask_chain(chain, "学校有多少个硕士点")
+    result = ask_chain(chain, "上海海事大学有多少个硕士点")
     print("AI: ", result["answer"])
-    result = ask_chain(chain, "学校有马克思主义学院吗？")
+    result = ask_chain(chain, "上海海事大学有马克思主义学院吗？")
     print("AI: ", result["answer"])
     while True:
       query = input("Human: ")
       if query == "quit":
         break
       #result = ask_chain(chain, query)
-      result = run_async_chain(chain, query, chat_history)
+      result = ask_chain(chain, query)
       print("AI: ", result["answer"])
   
 
@@ -345,7 +274,7 @@ def ask_chain(chain, query):
 def vectors():
   model, tokenizer = load_model(base_model, lora_model_path)
   # define LLM
-  llm=CustomLLM(model, tokenizer)
+  llm=CustomLLM(model, tokenizer, device)
   
   loader = DirectoryLoader("../data/", "**/*.txt")
   index = VectorstoreIndexCreator(
@@ -398,14 +327,14 @@ def construct_index(directory_path):
   documents = SimpleDirectoryReader(directory_path).load_data()
   
   service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, prompt_helper=prompt_helper)
-  index = GPTSimpleVectorIndex.from_documents(documents, service_context=service_context)
+  index = GPTVectorStoreIndex.from_documents(documents, service_context=service_context)
   
   index.save_to_disk('index.json')
   
   return index
 
 def ask_bot(input_index:str = 'index.json'):
-  index = GPTSimpleVectorIndex.load_from_disk(input_index)
+  index = GPTVectorStoreIndex.load_from_disk(input_index)
   while True:
     query = input('What do you want to ask the bot?   \n')
     response = index.query(query, response_mode="compact")
