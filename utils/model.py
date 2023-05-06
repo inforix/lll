@@ -79,7 +79,7 @@ def load_vicuna_model(device):
 
 def load_moss_moon():
   tokenizer = AutoTokenizer.from_pretrained("../models/moss-moon-003-sft-int4", trust_remote_code=True)
-  model = AutoModelForCausalLM.from_pretrained("../models/moss-moon-003-sft-int4", trust_remote_code=True)
+  model = AutoModelForCausalLM.from_pretrained("../models/moss-moon-003-sft-int4", trust_remote_code=True).half().cuda()
 
   return model, tokenizer
 
