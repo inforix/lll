@@ -1,4 +1,9 @@
-Use the following portion of a long document to see if any of the text is relevant to answer the question.
+Use the following portion of a long document delimitted by ``` to see if any of the text is relevant to answer the question.
+```
 {{ context }}
-Question: {{ question }}
-Provide all relevant text to the question verbatim. Summarize if needed. If nothing relevant return "-".
+```
+Question: 
+```
+{{ question }}
+```
+Provide all relevant text to the question verbatim. Summarize if needed. If nothing relevant return "I don't know".
