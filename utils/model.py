@@ -2,6 +2,8 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaTokenizer, LlamaForCausalLM
 from peft import PeftModel
 import os
+import sys
+import warnings
 
 def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu")):
   assert model_path is not None
@@ -40,6 +42,13 @@ def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu
  
   return model, tokenizer
 
+def load_alpaca_model(device):
+  base_model = "../models/llama-7b-hf"
+  lora_model_path = "../models/chinese_alpaca_lora_7b"
+
+  model, tokenizer = load_model(base_model, lora_model_path, device)
+  return model, tokenizer
+
 
 def load_vicuna_model(device):
   llama_model_path = "../models/llama-7b-hf"
@@ -56,6 +65,9 @@ def load_vicuna_model(device):
     print(pytorch_bin_path)
     if os.path.exists(pytorch_bin_path):
       os.rename(pytorch_bin_path, lora_bin_path)
+      warnings.warn(
+            "The file name of the lora checkpoint'pytorch_model.bin' is replaced with 'adapter_model.bin'"
+        )
     else:
       assert ('Checkpoint is not Found!')
       
@@ -74,14 +86,20 @@ def load_vicuna_model(device):
   
   print(model.dtype)
   model.eval()
+  if torch.__version__ >= "2" and sys.platform != "win32":
+    model = torch.compile(model)
 
   return model, tokenizer
 
 def load_moss_moon():
-  tokenizer = AutoTokenizer.from_pretrained("../models/moss-moon-003-sft-int4", trust_remote_code=True)
-  model = AutoModelForCausalLM.from_pretrained("../models/moss-moon-003-sft-int4", trust_remote_code=True).half().cuda()
+  tokenizer = AutoTokenizer.from_pretrained("../models/moss-moon-003-sft", trust_remote_code=True)
+  if torch.cuda.is_available():
+    model = AutoModelForCausalLM.from_pretrained("../models/moss-moon-003-sft", trust_remote_code=True).half().cuda()
+  else:
+    model = AutoModelForCausalLM.from_pretrained("../models/moss-moon-003-sft", trust_remote_code=True).float()
 
   return model, tokenizer
 
 if __name__ == "__main__":
+  torch.cuda.is_available = lambda: False
   load_moss_moon()

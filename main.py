@@ -28,7 +28,7 @@ import transformers
 from peft import PeftModel
 from PyPDF2 import PdfReader
 from utils.customllm import CustomVicunaLLM, CustomLLM
-from embedding import load_embedding
+from utils.embedding import load_embedding
 from utils.model import load_model, load_moss_moon, load_vicuna_model
 
 import os

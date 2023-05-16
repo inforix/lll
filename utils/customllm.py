@@ -1,6 +1,7 @@
 import torch
-from transformers import Pipeline, pipeline, GenerationConfig
+from transformers import Pipeline, pipeline, GenerationConfig, AutoModel, AutoTokenizer
 from langchain.llms.base import LLM
+from langchain.llms.utils import enforce_stop_tokens
 from typing import List, Optional, Mapping, Any
 import sys
 import logging
@@ -14,7 +15,7 @@ class CustomLLM(LLM):
     super().__init__()
     self.logger = logging.getLogger(self.__class__.__name__)
     self.logger.setLevel(logging.DEBUG)
-    self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device, trust_remote_code=True, torch_dtype = torch.float16)
+    self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device, trust_remote_code=True, torch_dtype = torch.float16, repetition_penalty=1.0)
     self.max_new_tokens = max_new_tokens
 
   def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
@@ -41,7 +42,7 @@ class CustomVicunaLLM(LLM):
   pipeline:Pipeline = None
   generation_config: GenerationConfig = None
   model: torch.nn.Module = None
-  toknizer: torch.nn.Module = None
+  tokenizer: torch.nn.Module = None
   repetition_penalty: float = 1.0
   use_typewriter: bool = True
   device: torch.device = torch.device("cpu")
@@ -63,13 +64,13 @@ class CustomVicunaLLM(LLM):
 
     self.model = torch.compile(model) if torch.__version__ >= "2" and sys.platform != "win32" else model
     
-    self.toknizer = tokenizer
+    self.tokenizer = tokenizer
     self.repetition_penalty = repetition_penalty
     self.use_typewriter = use_typewriter
     self.device = device
 
   def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-    inputs = self.toknizer(prompt, return_tensors="pt")
+    inputs = self.tokenizer(prompt, return_tensors="pt")
     input_ids = inputs["input_ids"].to(self.device)
     
     with torch.no_grad():
@@ -111,4 +112,59 @@ class CustomVicunaLLM(LLM):
   @property
   def _llm_type(self) -> str:
       return "custom"
+
+class ChatGLM(LLM):
+  max_token: int = 10000
+  temperature: float = 0.1
+  top_p = .9
+  history = []
+  tokenizer: object = None
+  model: object = None
+  
+  def __init__(self):
+    super().__init__()
+    
+  @property
+  def _llm_type(self) -> str:
+    return "ChatGLM"
+  
+  def _call(self, prompt:str, stop: Optional[List[str]] = None) -> str:
+    response, _ = self.model.chat(
+      self.tokenizer,
+      prompt,
+      history = self.history,
+      max_length = self.max_token,
+      temperature = self.temperature
+    )
+    
+    if stop is not None:
+      response = enforce_stop_tokens(response, stop)
+    
+    self.history = self.history + [[None, response]]
+    
+    return response
+
+  def load_model(self, model_name_or_path:str = "../models/chatglm-6b"):
+    self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
+
+    if torch.cuda.is_available():
+      self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=True).quantize(4).half().cuda()
+    else:
+      self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=True).float()
       
+    self.model = self.model.eval()
+
+if __name__ == "__main__":
+  torch.cuda.is_available = lambda: False
+  
+  # from model import load_vicuna_model
+  # device = "cpu"
+  
+  # model, tokenizer = load_vicuna_model(device)
+  # llm = CustomVicunaLLM(model, tokenizer, device)
+  # question:str = "请问什么时候放假"
+  # ret = llm.generate(question)
+  
+  chatglm = ChatGLM()
+  chatglm.load_model()
+  
