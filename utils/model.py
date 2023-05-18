@@ -4,6 +4,7 @@ from peft import PeftModel
 import os
 import sys
 import warnings
+from utils.peftmodel import StreamPeftGenerationMixin
 
 def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu")):
   assert model_path is not None
@@ -42,17 +43,34 @@ def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu
  
   return model, tokenizer
 
-def load_alpaca_model(device):
-  base_model = "../models/llama-7b-hf"
-  lora_model_path = "../models/chinese_alpaca_lora_7b"
+def load_alpaca_model(device, local:bool = True):
+  base_model = "../models/llama-7b-hf" if local else "decapoda-research/llama-7b-hf"
+  lora_model_path = "../models/chinese_alpaca_lora_7b" if local else "ziqingyang/chinese-alpaca-lora-7b"
 
+  
   model, tokenizer = load_model(base_model, lora_model_path, device)
   return model, tokenizer
 
+def load_vicuna_model(device, local:bool = True):
+  model_path = "../models/vicuna-7b" if local else "decapoda-research/llama-7b-hf"
+  lora_model_path = None # "../models/vicuna-7b-delta-v1.1" if local else "lmsys/vicuna-7b-delta-v1.1"
+  
+  if device == "cpu":
+    kwargs = {"torch_dtype": torch.float32}
+  else:
+    kwargs = {"torch_dtype": torch.float16}
+    
+  tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
+  model = AutoModelForCausalLM.from_pretrained(model_path,low_cpu_mem_usage=True, **kwargs)
+  
+  if device == "cuda":
+    model.to(device)
+  
+  return model, tokenizer
 
-def load_vicuna_model(device):
-  llama_model_path = "../models/llama-7b-hf"
-  lora_model_path = "../models/Chinese-Vicuna-lora-7b-belle-and-guanaco"
+def load_chinese_vicuna_model(device, local:bool = True):
+  llama_model_path = "../models/llama-7b-hf" if local else "decapoda-research/llama-7b-hf"
+  lora_model_path = "../models/Chinese-Vicuna-lora-7b-3epoch-belle-and-guanaco" if local else "Facico/Chinese-Vicuna-lora-7b-3epoch-belle-and-guanaco"
   
   # load tokenizer
   tokenizer = LlamaTokenizer.from_pretrained(llama_model_path, trust_remote_code=True)
@@ -81,8 +99,9 @@ def load_vicuna_model(device):
     model = LlamaForCausalLM.from_pretrained(llama_model_path,
                                              device_map={"":device},
                                              low_cpu_mem_usage=True)
-    model = PeftModel.from_pretrained(model, lora_model_path, device_map={"":device})
+    model = StreamPeftGenerationMixin.from_pretrained(model, lora_model_path, device_map={"":device})
     #model.half()
+  model.eval()
   
   print(model.dtype)
   model.eval()
@@ -91,12 +110,13 @@ def load_vicuna_model(device):
 
   return model, tokenizer
 
-def load_moss_moon():
-  tokenizer = AutoTokenizer.from_pretrained("../models/moss-moon-003-sft", trust_remote_code=True)
+def load_moss_moon(local:bool=True):
+  model_name_or_path = "../models/moss-moon-003-sft" if local else "fnlp/moss-moon-003-sft"
+  tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
   if torch.cuda.is_available():
-    model = AutoModelForCausalLM.from_pretrained("../models/moss-moon-003-sft", trust_remote_code=True).half().cuda()
+    model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True).half().cuda()
   else:
-    model = AutoModelForCausalLM.from_pretrained("../models/moss-moon-003-sft", trust_remote_code=True).float()
+    model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True).float()
 
   return model, tokenizer
 
