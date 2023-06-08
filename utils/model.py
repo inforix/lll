@@ -13,7 +13,7 @@ def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu
   tokenizer_model_path = model_path
   if lora_path is not None:
     tokenizer_model_path = lora_path
-  tokenizer = LlamaTokenizer.from_pretrained(tokenizer_model_path, trust_remote_code=True)
+  tokenizer = AutoTokenizer.from_pretrained(tokenizer_model_path, trust_remote_code=True)
   base_model = AutoModelForCausalLM.from_pretrained(
     model_path,
     load_in_8bit=False,
@@ -68,7 +68,7 @@ def load_vicuna_model(device, local:bool = True):
   
   return model, tokenizer
 
-def load_chinese_vicuna_model(device, local:bool = True):
+def load_chinese_vicuna_model(device:str = "cpu", local:bool = True):
   llama_model_path = "../models/llama-7b-hf" if local else "decapoda-research/llama-7b-hf"
   lora_model_path = "../models/Chinese-Vicuna-lora-7b-3epoch-belle-and-guanaco" if local else "Facico/Chinese-Vicuna-lora-7b-3epoch-belle-and-guanaco"
   
@@ -91,17 +91,18 @@ def load_chinese_vicuna_model(device, local:bool = True):
       
   if torch.cuda.is_available():
     model = LlamaForCausalLM.from_pretrained(llama_model_path,
-                                             load_in_8bit=True,
+                                             #load_in_8bit=True,
                                              torch_dtype = torch.float16,
-                                             device_map={"":0},)
-    model = PeftModel.from_pretrained(model, lora_model_path, torch_dtype = torch.float16, device_map={"":0})
+                                             device_map="auto",
+                                             )
+    model = PeftModel.from_pretrained(model, lora_model_path, torch_dtype = torch.float16, device_map="auto")
   else:
     model = LlamaForCausalLM.from_pretrained(llama_model_path,
-                                             device_map={"":device},
+                                             device_map={"": device},
                                              low_cpu_mem_usage=True)
     model = StreamPeftGenerationMixin.from_pretrained(model, lora_model_path, device_map={"":device})
+  # if not LOAD_8BIT:
     #model.half()
-  model.eval()
   
   print(model.dtype)
   model.eval()

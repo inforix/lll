@@ -66,15 +66,15 @@ class CustomVicunaLLM(LLM):
       top_p=top_p,
       top_k=top_k,
       num_beams=num_beams,
-      eos_token_id=tokenizer.eos_token_id,
-      pad_token_id=tokenizer.pad_token_id,
+      bos_token_id=1,
+      eos_token_id=2,
+      pad_token_id=0,
       max_new_tokens=max_new_tokens, # max_length=max_new_tokens+input_sequence
       min_new_tokens=min_new_tokens, # min_length=min_new_tokens+input_sequence
       **kwargs,
     )
 
-    self.model = torch.compile(model) if torch.__version__ >= "2" and sys.platform != "win32" else model
-    
+    self.model = model
     self.tokenizer = tokenizer
     self.repetition_penalty = repetition_penalty
     self.use_typewriter = use_typewriter
@@ -82,43 +82,24 @@ class CustomVicunaLLM(LLM):
 
   def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
     inputs = self.tokenizer(prompt, return_tensors="pt")
-    if device == "cuda":
-      input_ids = inputs["input_ids"].to(self.device)
-    else:
-      input_ids = inputs["input_ids"]
+    input_ids = inputs["input_ids"].to(self.device)
     
     with torch.no_grad():
-      if self.use_typewriter:
-        for generation_output in self.model.stream_generate(
-          input_ids=input_ids,
-          generation_config=self.generation_config,
-          return_dict_in_generate=True,
-          output_scores=False,
-          repetition_penalty=float(self.repetition_penalty),
-        ):
-          outputs = self.tokenizer.batch_decode(generation_output)
-          show_text = "\n--------------------------------------------\n".join(
-              [output.split("### Response:")[1].strip().replace('�','')+" ▌" for output in outputs]
-          )
-          # if show_text== '':
-          #     yield last_show_text
-          # else:
-          yield show_text
-        yield outputs[0].split("### Response:")[1].strip().replace('�','')
-      else:
-        generation_output = self.model.generate(
-          input_ids=input_ids,
-          generation_config=self.generation_config,
-          return_dict_in_generate=True,
-          output_scores=False,
-          repetition_penalty=self.repetition_penalty,
-        )
-        # output = generation_output.sequences[0]
-        # output = self.tokenizer.decode(output).split("### Response:")[1].strip()
-        output = generation_output[0][len(input_ids[0]):]
-        output = self.tokenizer.decode(output, skip_special_tokens=True).strip()
-        print(output)
-        return(output)
+      
+      generation_output = self.model.generate(
+        input_ids=input_ids,
+        generation_config=self.generation_config,
+        return_dict_in_generate=True,
+        output_scores=False,
+        repetition_penalty=self.repetition_penalty,
+      )
+      # output = generation_output.sequences[0]
+      # output = self.tokenizer.decode(output).split("### Response:")[1].strip()
+      output = generation_output.sequences[0]
+      output = self.tokenizer.decode(output).split("### Response:")[1].strip()
+      #output = self.tokenizer.decode(output, skip_special_tokens=True).strip()
+      print(output)
+      return(output)
     
 
   @property
