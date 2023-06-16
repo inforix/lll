@@ -6,7 +6,7 @@ import sys
 import warnings
 from utils.peftmodel import StreamPeftGenerationMixin
 
-def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu")):
+def load_model(model_path: str, lora_path:str = None, device = "cpu"):
   assert model_path is not None
 
   load_type = torch.float16
@@ -36,7 +36,7 @@ def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu
   else:
     model = PeftModel.from_pretrained(base_model, lora_path, torch_dtype = load_type)
 
-  if device == torch.device("cpu"):
+  if device == "cpu":
     model.float()
   model.to(device)
   model.eval()
@@ -45,8 +45,9 @@ def load_model(model_path: str, lora_path:str = None, device = torch.device("cpu
 
 def load_alpaca_model(device, local:bool = True):
   base_model = "../models/llama-7b-hf" if local else "decapoda-research/llama-7b-hf"
-  lora_model_path = "../models/chinese_alpaca_lora_7b" if local else "ziqingyang/chinese-alpaca-lora-7b"
-
+  lora_model_path = "../models/chinese-alpaca-lora-7b" if local else "ziqingyang/chinese-alpaca-lora-7b"
+  #base_model = "../models/chinese-alpaca-7b"
+  #lora_model_path = None
   
   model, tokenizer = load_model(base_model, lora_model_path, device)
   return model, tokenizer

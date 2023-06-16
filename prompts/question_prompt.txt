@@ -1,10 +1,7 @@
-基于以下已知内容，简洁、专业地回答用户的问题。
-如果无法从中得到答案，请说 "根据已知内容无法回答该问题" 或 "没有提供足够的相关信息"，不允许在答案中添加编造成分，答案请使用中文。
-已知内容:
+Below is an instruction that describes a task. Write a response that appropriately completes the request.
 
-{{ context }}
+### Instruction:
+{context}
+{question}
 
-### 问题:
-{{ question }}
-
-### Response:
+### Response: 

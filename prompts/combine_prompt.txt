@@ -2,9 +2,9 @@
 
 问题:
 ```
- {{ question }}
+ {question}
 ```
 文字材料：
 ```
-{{ summaries }}
+{summaries}
 ```
