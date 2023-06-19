@@ -6,7 +6,7 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain import PromptTemplate
 from langchain.docstore.document import Document
 
-#torch.cuda.is_available = lambda: False
+torch.cuda.is_available = lambda: False
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
     
@@ -20,8 +20,8 @@ model = AutoModelForCausalLM.from_pretrained(model_path,low_cpu_mem_usage=True,
                                              trust_remote_code=True)
 model.to(device)
 if device == "cuda":
-    model.half()
-model.eval()
+  model.half()
+#model.eval()
 
 
 text1 = """在2004年教育部本科教学工作水平评估和2006年教育部英语专业教学评估中获得优秀。近年来，科技服务能力不断提升，获一批国家级科研项目及部市级以上科技进步奖。
@@ -67,6 +67,14 @@ template_quest = """Below is a context and a question, please answer the questio
 {question}
 ### Response:"""
 
+template_question = """下面有一段文本，请根据文本内容回答后面的问题，如果不能从文本中找到答案就直接返回“不知道”。
+### 文本内容:
+{context}
+### 问题:
+{question}
+### Response:
+"""
+
 llm = CustomLLM(model, tokenizer, device = device)
 
 q_prompt = PromptTemplate(input_variables=["context", "question"], template=template_quest)
@@ -81,13 +89,13 @@ def qa(context, question):
   answer = chain.run(input_documents=docs, question=question)
   print(answer)
 
-with torch.no_grad():
-    qa(text1, question1)
-    qa(text2, question2)
-    qa(text3, question3)
-    qa(text4, question4)
-    qa(text5, question5)
-    qa(text6, question6)
-    qa(text7, question7)
-    qa(text8, question8)
-    qa(text9, question9)
+#with torch.no_grad():
+qa(text1, question1)
+qa(text2, question2)
+qa(text3, question3)
+qa(text4, question4)
+qa(text5, question5)
+qa(text6, question6)
+qa(text7, question7)
+qa(text8, question8)
+qa(text9, question9)
