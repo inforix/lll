@@ -1,0 +1,33 @@
+import torch
+from utils.embedding import load_embedding
+from utils.documents import load_documents
+from utils.vendors import ChromaVectorStore
+
+
+from langchain.chains.question_answering import load_qa_chain
+from utils.model import load_chinese_vicuna_model, load_model, load_alpaca_model
+from utils.mossllm import MOSSLLM
+from utils.chatglm import ChatGLM
+from utils.customllm import CustomVicunaLLM, CustomLLM
+from langchain import HuggingFacePipeline
+
+torch.cuda.is_available = lambda: False
+
+from qadoc import QA
+  
+qa = QA(embedding_model_path="../models/chinese-roberta-wwm-ext-large",
+        model_path="../models/llama-7b-hf",
+        lora_path="../models/chinese-alpaca-lora-7b",
+        model_type="alpaca",
+        device="cpu"
+        )
+
+print(qa.query("上海高级国际航运学院是哪一年成立的？")) #, "学校2013年成立中国（上海）自贸区供应链研究院和上海高级国际航运学院"))
+print(qa.query("上海海事大学有多少毕业生？")) #, "输送了逾19万毕业生"))
+print(qa.query("上海海事大学有几个博士点？")) ##, "4个一级学科博士点"))
+print(qa.query("上海海事大学有多少个硕士点？")) #, "17个一级学科硕士学位授权点"))
+print(qa.query("上海海事大学有马克思主义学院吗？")) #, "徐悲鸿艺术学院、马克思主义学院、"))
+print(qa.query("通知公告的主管部门是？")) #, "二、通知公告"))
+print(qa.query("离沪外出请假报告相关的规章制度有哪些？")) ##, "1.《上海海事大学领导干部离沪外出请假报告规定"))
+print(qa.query("信息化专项申报的联系方式是什么号码？")) ##, "38284493"))
+print(qa.query("2023年4月19日有什么活动？")) #, "4月19日"))

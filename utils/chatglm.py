@@ -13,9 +13,15 @@ class ChatGLM(LLM):
   history = []
   tokenizer: object = None
   model: object = None
+  model_path:str = None
+  device: str = None
   
-  def __init__(self):
+  def __init__(self, model_name_or_path:str, device:str = None):
     super().__init__()
+    self.model_path = model_name_or_path
+    self.device = "cuda" if torch.cuda.is_available() else "cpu" if device is None or device == "cuda" else device
+    
+    self.load_model()
     
   @property
   def _llm_type(self) -> str:
@@ -37,26 +43,21 @@ class ChatGLM(LLM):
     
     return response
 
-  def load_model(self, model_name_or_path:str = "../models/chatglm-6b"):
-    self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
+  def load_model(self):
+    self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
 
-    if torch.cuda.is_available():
-      self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=True).quantize(4).half().cuda()
+    if self.device == "cuda":
+      self.model = AutoModel.from_pretrained(self.model_path, trust_remote_code=True).quantize(4).half().cuda()
     else:
-      self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=True).float()
+      self.model = AutoModel.from_pretrained(self.model_path, trust_remote_code=True).float()
       
     self.model = self.model.eval()
 
 if __name__ == "__main__":
   torch.cuda.is_available = lambda: False
+   
+  chatglm = ChatGLM("../models/chatglm-6b")
+
+  answer = chatglm.generate(["你好"])
+  print(answer)
   
-  # from model import load_vicuna_model
-  # device = "cpu"
-  
-  # model, tokenizer = load_vicuna_model(device)
-  # llm = CustomVicunaLLM(model, tokenizer, device)
-  # question:str = "请问什么时候放假"
-  # ret = llm.generate(question)
-  
-  chatglm = ChatGLM()
-  chatglm.load_model()

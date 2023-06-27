@@ -1,33 +1,83 @@
+import os
 import torch
-from utils.embedding import load_embedding
-from utils.documents import load_documents
-from utils.vendors import ChromaVectorStore
-
-
-from langchain.chains.question_answering import load_qa_chain
-from utils.model import load_chinese_vicuna_model, load_model, load_alpaca_model
-from utils.mossllm import MOSSLLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from utils.customllm import CustomLLM, CustomHFLLM
+from utils.model import load_alpaca_model, load_chinese_vicuna_model, load_moss_moon, load_wizard_model
 from utils.chatglm import ChatGLM
-from utils.customllm import CustomVicunaLLM, CustomLLM
-from langchain import HuggingFacePipeline
+from utils.mossllm import MOSSLLM
+from utils.QuestionAnswerChain import QuestionAnswerChain
+from langchain.chains.question_answering import load_qa_chain
+from langchain import PromptTemplate
+from langchain.docstore.document import Document
+from argparse import ArgumentParser
+from questions import Texts, Questions
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 torch.cuda.is_available = lambda: False
 
-from qadoc import QA
-  
-qa = QA(embedding_model_path="../models/chinese-roberta-wwm-ext-large",
-        model_path="../models/llama-7b-hf",
-        lora_path="../models/chinese-alpaca-lora-7b",
-        model_type="alpaca",
-        device="cpu"
-        )
+device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+parser = ArgumentParser()
+parser.add_argument("-m", "--model", type=str, default="alpaca", help="Model to use")
+args = parser.parse_args()
 
-print(qa.query("上海高级国际航运学院是哪一年成立的？")) #, "学校2013年成立中国（上海）自贸区供应链研究院和上海高级国际航运学院"))
-print(qa.query("上海海事大学有多少毕业生？")) #, "输送了逾19万毕业生"))
-print(qa.query("上海海事大学有几个博士点？")) ##, "4个一级学科博士点"))
-print(qa.query("上海海事大学有多少个硕士点？")) #, "17个一级学科硕士学位授权点"))
-print(qa.query("上海海事大学有马克思主义学院吗？")) #, "徐悲鸿艺术学院、马克思主义学院、"))
-print(qa.query("通知公告的主管部门是？")) #, "二、通知公告"))
-print(qa.query("离沪外出请假报告相关的规章制度有哪些？")) ##, "1.《上海海事大学领导干部离沪外出请假报告规定"))
-print(qa.query("信息化专项申报的联系方式是什么号码？")) ##, "38284493"))
-print(qa.query("2023年4月19日有什么活动？")) #, "4月19日"))
+
+
+template_quest = """Below is a context and a question, please answer the question according by the context.if there is no answer in context, please answer 'No' directly.
+Context:
+```
+{context}
+```
+Question:
+```
+{question}
+```
+### Response:"""
+
+template_quest = """已知信息：
+{context} 
+根据上述已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 “根据已知信息无法回答该问题” 或 “没有提供足够的相关信息”，不允许在答案中添加编造成分，答案请使用中文。 问题是：{question}"""
+
+# template_question = """根据接下来的文本内容回答后面的问题，如果不能从文本内容中找到答案就直接返回“不知道”，不要随意捏造文字。
+# ### 文本内容:
+# {context}
+# ### 问题:
+# {question}
+# ### Response:
+# """
+
+# model, tokenizer = load_wizard_model(device) #
+# model, tokenizer = load_alpaca_model(device)
+# #model, tokenizer = load_chinese_vicuna_model(device)
+
+#model.eval()
+#print("model loaded!")
+
+# if args.model == "chatglm":
+#   llm = ChatGLM("../models/chatglm2-6b")
+# elif args.model == "moss":
+#   llm = MOSSLLM("../models/moss-moon-003-sft")
+# else:  
+#   llm = CustomHFLLM(device = device, model_name=args.model)
+
+# q_prompt = PromptTemplate(input_variables=["context", "question"], template=template_quest)
+
+# chain = load_qa_chain(llm, chain_type="stuff", prompt=q_prompt)
+
+
+# def qa(context, question):
+#   doc = Document(page_content=context, metadata={})
+#   docs = [doc]
+
+#   answer = chain.run(input_documents=docs, question=question)
+#   print(answer)
+  
+chain = QuestionAnswerChain(args.model, device)
+logger.info("chain loaded.")
+
+for i in range(len(Texts)):
+  outputs = chain.question_over_document(Texts[i], Questions[i])
+  print(Questions[i], "\n", outputs, "\n\n")

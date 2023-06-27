@@ -4,7 +4,6 @@ from peft import PeftModel
 import os
 import sys
 import warnings
-from utils.peftmodel import StreamPeftGenerationMixin
 
 def load_model(model_path: str, lora_path:str = None, device = "cpu"):
   assert model_path is not None
@@ -43,14 +42,37 @@ def load_model(model_path: str, lora_path:str = None, device = "cpu"):
  
   return model, tokenizer
 
+def load_alpaca_plus_model(device, local:bool = True):
+  model_path = "../models/chinese-alpaca-plus-7b"
+
+  tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+  model = AutoModelForCausalLM.from_pretrained(model_path,low_cpu_mem_usage=True,
+                                              device_map="auto",
+                                              trust_remote_code=True)
+  model.to(device)
+  if device == "cuda":
+    model.half()
+  
+  return model, tokenizer
+  
 def load_alpaca_model(device, local:bool = True):
   base_model = "../models/llama-7b-hf" if local else "decapoda-research/llama-7b-hf"
   lora_model_path = "../models/chinese-alpaca-lora-7b" if local else "ziqingyang/chinese-alpaca-lora-7b"
-  #base_model = "../models/chinese-alpaca-7b"
-  #lora_model_path = None
+  # base_model = "../models/llama-30b-hf"
+  # lora_model_path = "../models/chinese-alpaca-lora-33b"
+  # base_model = "../models/chinese-alpaca-7b-merged"
+  # lora_model_path = None
   
   model, tokenizer = load_model(base_model, lora_model_path, device)
   return model, tokenizer
+
+def load_wizard_model(device, local:bool = True):
+  base_model = "../models/wizardLM-7B-HF" if local else "microsoft/wizardlm-base"
+  
+  model, tokenizer = load_model(base_model, None, device)
+  
+  return model, tokenizer
+
 
 def load_vicuna_model(device, local:bool = True):
   model_path = "../models/vicuna-7b" if local else "decapoda-research/llama-7b-hf"
@@ -101,7 +123,7 @@ def load_chinese_vicuna_model(device:str = "cpu", local:bool = True):
     model = LlamaForCausalLM.from_pretrained(llama_model_path,
                                              device_map={"": device},
                                              low_cpu_mem_usage=True)
-    model = StreamPeftGenerationMixin.from_pretrained(model, lora_model_path, device_map={"":device})
+    model = PeftModel.from_pretrained(model, lora_model_path, device_map={"":device})
   # if not LOAD_8BIT:
     #model.half()
   

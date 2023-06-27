@@ -10,8 +10,9 @@ class MOSSLLM(LLM):
   max_token: int = 2048
   temperature: float = 0.1
   top_k: int = 40
-  top_p: float = .9
+  top_p: float = 0.8
   repetition_penalty: float = 1.02
+  device: str = "cuda"
   
   model_name_or_path: str = ""
   history = []
@@ -29,25 +30,27 @@ class MOSSLLM(LLM):
     Capabilities and tools that MOSS can possess.
     """
     
-  def __init__(self, model_name_or_path: str = "../models/moss-moon-003-sft", model = None, tokenizer = None):
+  def __init__(self, model_name_or_path: str = "../models/moss-moon-003-sft", model = None, tokenizer = None, device : str = None):
     super().__init__()
     self.model_name_or_path = model_name_or_path
     self.model = model
     self.tokenizer = tokenizer
+    
+    self.device = "cuda" if torch.cuda.is_available() else "cpu" if device is None or device == "cuda" else device
+    
+    # ensure model is loaded
+    if self.model is None:
+      self.load_model()
     
   @property
   def _llm_type(self) -> str:
     return "MOSSLLM"
   
   def _call(self, prompt:str, stop: Optional[List[str]] = None) -> str:
-    # ensure model is loaded
-    if self.model is None:
-      self.load_model()
-      
     query = self.meta_instruction + '<|Human|>: ' + prompt + '<eoh>'
     inputs = self.tokenizer(query, return_tensors="pt")
     
-    if torch.cuda.is_available():
+    if "cuda" == self.device:
       input_ids = inputs.input_ids.cuda()
       attention_mask = inputs.attention_mask.cuda()
     else:
@@ -65,11 +68,11 @@ class MOSSLLM(LLM):
           temperature = self.temperature,
           repetition_penalty = self.repetition_penalty,
           num_return_sequences = 1,
-          eos_token_id=106068,
-          pad_token_id=106068, #self.tokenizer.pad_token_id
+          #eos_token_id=106068,
+          #pad_token_id=106068, #self.tokenizer.pad_token_id
       )
       response = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
-      prompt += response
+      #prompt += response
       print(response.lstrip('\n'))
 
     if stop is not None:
@@ -83,7 +86,7 @@ class MOSSLLM(LLM):
 
   def load_model(self):
     self.tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path, trust_remote_code=True)
-    if torch.cuda.is_available():
+    if self.device == "cuda":
       self.model = AutoModelForCausalLM.from_pretrained(self.model_name_or_path, trust_remote_code=True).half().cuda()
     else:
       self.model = AutoModelForCausalLM.from_pretrained(self.model_name_or_path, trust_remote_code=True).float()
@@ -92,5 +95,8 @@ class MOSSLLM(LLM):
     
 if __name__ == "__main__":
   torch.cuda.is_available = lambda: False
+  
   llm = MOSSLLM()
-  llm.load_model()
+
+  answer = llm("请问复旦大学坐落在哪里？")
+  print(answer)
