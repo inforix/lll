@@ -66,6 +66,13 @@ def load_alpaca_model(device, local:bool = True):
   model, tokenizer = load_model(base_model, lora_model_path, device)
   return model, tokenizer
 
+def load_alpaca2_model(device, local:bool = True):
+  base_model = "../models/chinese-alpaca-2-7b" if local else "ziqingyang/chinese-alpaca-2-7b"
+  lora_model_path = None
+  
+  model, tokenizer = load_model(base_model, lora_model_path, device)
+  return model, tokenizer
+
 def load_wizard_model(device, local:bool = True):
   base_model = "../models/wizardLM-7B-HF" if local else "microsoft/wizardlm-base"
   

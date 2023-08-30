@@ -1,17 +1,11 @@
 import os
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from utils.customllm import CustomLLM, CustomHFLLM
-from utils.model import load_alpaca_model, load_chinese_vicuna_model, load_moss_moon, load_wizard_model
-from utils.chatglm import ChatGLM
-from utils.mossllm import MOSSLLM
-from utils.QuestionAnswerChain import QuestionAnswerChain
-from langchain.chains.question_answering import load_qa_chain
-from langchain import PromptTemplate
-from langchain.docstore.document import Document
-from argparse import ArgumentParser
-from questions import Texts, Questions
 import logging
+from argparse import ArgumentParser
+
+from utils.QuestionAnswerChain import QuestionAnswerChain
+
+from questions import Texts, Questions
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -22,6 +16,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
     
 parser = ArgumentParser()
 parser.add_argument("-m", "--model", type=str, default="alpaca", help="Model to use")
+parser.add_argument("-t","--template", type=str, default=None, help="Template to use")
 args = parser.parse_args()
 
 
@@ -49,33 +44,12 @@ template_quest = """已知信息：
 # ### Response:
 # """
 
-# model, tokenizer = load_wizard_model(device) #
-# model, tokenizer = load_alpaca_model(device)
-# #model, tokenizer = load_chinese_vicuna_model(device)
+# if use OpenAI
+if args.model == "openai":
+  os.environ['OPENAI_API_KEY'] = "sk-CGG8G29a47ViRhvVsCGPT8BlbkFJBvFr65mZcMJWH8fayZO8"
+  os.environ['HTTPS_PROXY']="http://10.81.38.5:8443"
 
-#model.eval()
-#print("model loaded!")
-
-# if args.model == "chatglm":
-#   llm = ChatGLM("../models/chatglm2-6b")
-# elif args.model == "moss":
-#   llm = MOSSLLM("../models/moss-moon-003-sft")
-# else:  
-#   llm = CustomHFLLM(device = device, model_name=args.model)
-
-# q_prompt = PromptTemplate(input_variables=["context", "question"], template=template_quest)
-
-# chain = load_qa_chain(llm, chain_type="stuff", prompt=q_prompt)
-
-
-# def qa(context, question):
-#   doc = Document(page_content=context, metadata={})
-#   docs = [doc]
-
-#   answer = chain.run(input_documents=docs, question=question)
-#   print(answer)
-  
-chain = QuestionAnswerChain(args.model, device)
+chain = QuestionAnswerChain(args.model, device, question_template=args.template)
 logger.info("chain loaded.")
 
 for i in range(len(Texts)):

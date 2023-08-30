@@ -5,7 +5,7 @@ from langchain.llms.utils import enforce_stop_tokens
 from typing import List, Optional, Mapping, Any
 import sys
 import logging
-from utils.model import load_alpaca_model, load_alpaca_plus_model, load_vicuna_model
+from utils.model import load_alpaca_model, load_alpaca_plus_model, load_vicuna_model, load_chinese_vicuna_model, load_model, load_alpaca2_model
 
 class CustomHFLLM(LLM):
   model_name:str = "CustomHFLLM"
@@ -78,6 +78,10 @@ class CustomHFLLM(LLM):
         self.model, self.tokenizer = load_vicuna_model(self.device)
       elif self.model_name == "chinese_vicuna":
         self.model, self.tokenizer = load_chinese_vicuna_model(self.device)
+      elif self.model_name == "xgen":
+        self.model, self.tokenizer = load_model("../models/xgen-7b-8k-inst")
+      else:
+        raise ValueError(f"Unknown model_name:{self.model_name}" )
 
 class CustomLLM(LLM):
   generation_config: GenerationConfig = None
@@ -149,12 +153,16 @@ class CustomLLM(LLM):
     if self.model is None:
       if self.model_name == "alpaca":
         self.model, self.tokenizer = load_alpaca_model(self.device)
+      elif self.model_name == "alpaca2":
+        self.model, self.tokenizer = load_alpaca2_model(self.device)
       elif self.model_name == "alpaca_plus":
         self.model, self.tokenizer = load_alpaca_plus_model(self.device)
       elif self.model_name == "vicuna":
         self.model, self.tokenizer = load_vicuna_model(self.device)
       elif self.model_name == "chinese_vicuna":
         self.model, self.tokenizer = load_chinese_vicuna_model(self.device)
+      elif self.model_name == "xgen":
+        self.model, self.tokenizer = load_model("../models/xgen-7b-8k-inst")
       else:
         raise ValueError(f"Unknown model_name:{self.model_name}" )
         
