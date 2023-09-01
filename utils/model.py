@@ -67,7 +67,7 @@ def load_alpaca_model(device, local:bool = True):
   return model, tokenizer
 
 def load_alpaca2_model(device, local:bool = True):
-  base_model = "../models/chinese-alpaca-2-7b" if local else "ziqingyang/chinese-alpaca-2-7b"
+  base_model = "../models/chinese-alpaca-2-13b-hf" if local else "ziqingyang/chinese-alpaca-2-7b"
   lora_model_path = None
   
   model, tokenizer = load_model(base_model, lora_model_path, device)
