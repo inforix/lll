@@ -15,3 +15,5 @@ llama_index
 chromadb
 unstructured
 pytesseract
+dashscope
+

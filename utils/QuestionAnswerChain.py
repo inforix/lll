@@ -6,10 +6,13 @@ from langchain import PromptTemplate
 from langchain.docstore.document import Document
 from langchain.llms import OpenAI
 
+from langchain_wenxin import Wenxin
+
 from utils.chatglm import ChatGLM
 from utils.mossllm import MOSSLLM
 from utils.customllm import CustomLLM, CustomHFLLM
 from utils.cpmbeellm import CPMBeeLLM
+from utils.baichuan import BaichuanChat
 
 class QuestionAnswerChain:
   _template_quest = """已知信息：
@@ -20,7 +23,7 @@ class QuestionAnswerChain:
   def __init__(self, model_name:str = "alpaca", device:str="cuda", question_template:str = None) -> None:
     self.model_name = model_name
     self.device = "cuda" if torch.cuda.is_available() else "cpu" if device is None or device == "cuda" else device
-    self.question_template = self._template_quest if question_template == "default" else question_template
+    self.question_template = self._template_quest if question_template == "default" or question_template is None else question_template
 
     self.load_llm()
   
@@ -32,10 +35,14 @@ class QuestionAnswerChain:
       llm = MOSSLLM("../models/moss-moon-003-sft", device=self.device)
     elif self.model_name == "openai":
       llm = OpenAI()
+    elif self.model_name == "baichuan":
+      llm = BaichuanChat("../models/Baichuan-13B-Chat", device=self.device)
     elif self.model_name == "cpmbee":
       llm = CPMBeeLLM("../models/cpm-bee-10b", device=self.device)
     elif self.model_name == "xgen":
       llm = CustomLLM(device = self.device, model_name=self.model_name, eos_token_id=50256)
+    elif self.model_name == "wenxin":
+      llm = Wenxin(model="ernie-bot")
     else:  
       llm = CustomLLM(device = self.device, model_name=self.model_name)
 
@@ -47,6 +54,10 @@ class QuestionAnswerChain:
       q_prompt = PromptTemplate(input_variables=["context", "question"], template=self.question_template)
 
     self.chain = load_qa_chain(llm, chain_type="stuff", prompt=q_prompt)
+  
+  def query(self, question:str) -> str:
+    answer = self.chain.run(question=question)
+    return answer
   
   def question_over_document(self, text:str, question:str) -> str:
     doc = Document(page_content=text, metadata={})

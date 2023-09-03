@@ -8,9 +8,12 @@
 			"name": "debug main",
 			"type": "python",
 			"request": "launch",
-			"program": "main.py",
+			"program": "test.py",
 			"console": "integratedTerminal",
-			"justMyCode": true
+			"justMyCode": true,
+			"args":[
+				"-mwenxin"
+			]
 		}
 	]
 }
