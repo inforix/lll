@@ -6,12 +6,16 @@ from pydantic import BaseModel, Extra, Field
 from typing import Any, List
 from langchain_wenxin import WenxinEmbeddings
 from langchain.embeddings import DashScopeEmbeddings
+from sentence_transformers import SentenceTransformer
+
 #from gensim.models import KeyedVectors
 
 # Load embedding
 def load_embedding(embedding_source:str = "huggingface", embedding_model_path:str = "../models/chinese-roberta-wwm-ext-large"):
   if embedding_source == "openai":
     return OpenAIEmbeddings()
+  elif embedding_source == "sentence-transformers":
+    return SentenceTransformer(embedding_model_path, trust_remote_code=True)
   elif embedding_source == "huggingface":
     #llama_model_path = "../models/all-mpnet-base-v2"
     #llama_model_path = "../models/text2vec-large-chinese"
