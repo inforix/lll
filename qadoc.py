@@ -31,7 +31,7 @@ Answer the question in chinese based on the context below. Keep the answer short
 
 class QA:
   
-  def __init__(self, embedding_source:str, embedding_model_path: str, model_path:str=None, lora_path: str=None, model_type:str = "alpaca", device:str = "cuda", **embedding_args) -> None:
+  def __init__(self, embedding_source:str, embedding_model_path: str, model_path:str=None, lora_path: str=None, model_type:str = "alpaca", device:str = "cuda") -> None:
     self.device = device
     if device == "cuda" and not torch.cuda.is_available():
       self.device = "cpu"
@@ -44,7 +44,7 @@ class QA:
     self.chain = None
     
     #self.embedding = HuggingFaceEmbeddings(model_name=self.embedding_model_path)
-    self.embedding = load_embedding(embedding_source=embedding_source, embedding_model_path=embedding_model_path, embedding_args)
+    self.embedding = load_embedding(embedding_source=embedding_source, embedding_model_path=embedding_model_path)
     #self.load_model()
     self.add_documents()
   
