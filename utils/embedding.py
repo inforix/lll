@@ -14,8 +14,6 @@ from sentence_transformers import SentenceTransformer
 def load_embedding(embedding_source:str = "huggingface", embedding_model_path:str = "../models/chinese-roberta-wwm-ext-large"):
   if embedding_source == "openai":
     return OpenAIEmbeddings()
-  elif embedding_source == "sentence-transformers":
-    return SentenceTransformer(embedding_model_path, trust_remote_code=True)
   elif embedding_source == "huggingface":
     #llama_model_path = "../models/all-mpnet-base-v2"
     #llama_model_path = "../models/text2vec-large-chinese"
@@ -23,7 +21,7 @@ def load_embedding(embedding_source:str = "huggingface", embedding_model_path:st
       encode_kwargs = {'normalize_embeddings': True}
       embed_model = HuggingFaceEmbeddings(model_name=embedding_model_path, encode_kwargs=encode_kwargs)
     else:
-      embed_model = HuggingFaceEmbeddings(model_name=embedding_model_path, trust_remote_code=True)
+      embed_model = HuggingFaceEmbeddings(model_name=embedding_model_path)
     return embed_model
   elif embedding_source == "wenxin":
     return WenxinEmbeddings(truncate="END")
