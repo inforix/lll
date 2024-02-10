@@ -56,7 +56,7 @@ class BaichuanChat(LLM):
 if __name__ == "__main__":
   torch.cuda.is_available = lambda: False
    
-  llm = BaichuanChat("../models/Baichuan-13B-Chat")
+  llm = BaichuanChat("../models/Baichuan2-7B-Chat")
 
   answer = llm.generate(["你好"])
   print(answer)

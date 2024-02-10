@@ -49,7 +49,7 @@ args = parser.parse_args()
 #chain = QuestionAnswerChain(args.model, device, question_template=template_quest1)
 #logger.info("chain loaded.")
 
-qa = QA(embedding_source="dashscope", embedding_model_path="../models/m3e-large", model_type="wenxin", device=device)
+qa = QA(embedding_source="baichuan", embedding_model_path="../models/m3e-large", model_type="wenxin", device=device)
 for question in Questions:
   print(question)
   print(qa.query(question))

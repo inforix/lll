@@ -16,4 +16,4 @@ chromadb
 unstructured
 pytesseract
 dashscope
-
+langchain_wenxin

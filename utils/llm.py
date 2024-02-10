@@ -25,7 +25,7 @@ def load_llm(model_name:str = "alpaca", device:str="cuda"):
   elif model_name == "openai":
     llm = OpenAI()
   elif model_name == "baichuan":
-    llm = BaichuanChat("../models/Baichuan-13B-Chat", device=device)
+    llm = BaichuanChat("../models/Baichuan2-7B-Chat", device=device)
   elif model_name == "cpmbee":
     llm = CPMBeeLLM("../models/cpm-bee-10b", device=device)
   elif model_name == "xgen":

@@ -9,7 +9,7 @@ from langchain.embeddings import DashScopeEmbeddings
 #from gensim.models import KeyedVectors
 
 # Load embedding
-def load_embedding(embedding_source:str = "huggingface", embedding_model_path:str = "../models/chinese-roberta-wwm-ext-large"):
+def load_embedding(embedding_source:str = "huggingface", embedding_model_path:str = "../models/chinese-roberta-wwm-ext-large", **embedding_args):
   if embedding_source == "openai":
     return OpenAIEmbeddings()
   elif embedding_source == "huggingface":
@@ -19,7 +19,7 @@ def load_embedding(embedding_source:str = "huggingface", embedding_model_path:st
       encode_kwargs = {'normalize_embeddings': True}
       embed_model = HuggingFaceEmbeddings(model_name=embedding_model_path, encode_kwargs=encode_kwargs)
     else:
-      embed_model = HuggingFaceEmbeddings(model_name=embedding_model_path)
+      embed_model = HuggingFaceEmbeddings(model_name=embedding_model_path, embedding_args)
     return embed_model
   elif embedding_source == "wenxin":
     return WenxinEmbeddings(truncate="END")
