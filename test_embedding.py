@@ -10,7 +10,7 @@ from qadoc import QA
 
 load_dotenv()
 
-qa = QA(embedding_model_path="../models/m3e-large",
+qa = QA(embedding_model_path="../models/nomic-embed-text-v1",
         embedding_source="huggingface",
         model_type="wenxin",
         device="cpu"
