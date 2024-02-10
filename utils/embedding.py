@@ -21,7 +21,7 @@ def load_embedding(embedding_source:str = "huggingface", embedding_model_path:st
       encode_kwargs = {'normalize_embeddings': True}
       embed_model = HuggingFaceEmbeddings(model_name=embedding_model_path, encode_kwargs=encode_kwargs)
     else:
-      embed_model = HuggingFaceEmbeddings(model_name=embedding_model_path)
+      embed_model = HuggingFaceEmbeddings(model_name=embedding_model_path, model_kwargs={"trust_remote_code":True})
     return embed_model
   elif embedding_source == "wenxin":
     return WenxinEmbeddings(truncate="END")
